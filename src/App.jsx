@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 async function callClaude(systemPrompt, userMessage) {
-  const res = await fetch('/api/claude', {
+  const res = await fetch("https://ward-proxy.onrender.com/api/claude", {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
