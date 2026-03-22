@@ -67,6 +67,35 @@ app.post("/api/claude", async (req, res) => {
     },
     body: JSON.stringify(body),
   });
+  // ── GET all tasks ─────────────────────────────────
+app.get("/api/notion/tasks", async (req, res) => {
+  const r = await fetch(`https://api.notion.com/v1/databases/${process.env.NOTION_TASKS_DB_ID}/query`, {
+    method: "POST",
+    headers: NOTION_HEADERS,
+    body: JSON.stringify({ sorts: [{ property: "Status", direction: "ascending" }] }),
+  });
+  res.json(await r.json());
+});
+
+// ── CREATE task ───────────────────────────────────
+app.post("/api/notion/tasks", async (req, res) => {
+  const r = await fetch("https://api.notion.com/v1/pages", {
+    method: "POST",
+    headers: NOTION_HEADERS,
+    body: JSON.stringify({ parent: { database_id: process.env.NOTION_TASKS_DB_ID }, properties: req.body }),
+  });
+  res.json(await r.json());
+});
+
+// ── UPDATE task ───────────────────────────────────
+app.patch("/api/notion/tasks/:id", async (req, res) => {
+  const r = await fetch(`https://api.notion.com/v1/pages/${req.params.id}`, {
+    method: "PATCH",
+    headers: NOTION_HEADERS,
+    body: JSON.stringify({ properties: req.body }),
+  });
+  res.json(await r.json());
+});
   res.json(await r.json());
 });
 
