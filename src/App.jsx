@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 
-// ── Proxy & Notion helpers ─────────────────────────────────────────────────
 const PROXY = "https://ward-proxy.onrender.com";
 
 async function callClaude(systemPrompt, userMessage) {
@@ -17,64 +16,6 @@ async function callClaude(systemPrompt, userMessage) {
   });
   const data = await res.json();
   return (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-}
-
-function notionToPatient(page) {
-  const p = page.properties;
-  const txt = (field) => p[field]?.rich_text?.[0]?.plain_text || "";
-  const num = (field) => p[field]?.number?.toString() || "—";
-  return {
-    id: page.id,
-    notionId: page.id,
-    name: p.Name?.title?.[0]?.plain_text || "",
-    bed: txt("Bed"),
-    age: p.Age?.number || "",
-    diagnosis: txt("Diagnosis"),
-    status: (p.Status?.select?.name || "stable").toLowerCase(),
-    attending: txt("Attending"),
-    admitDate: p["Admit Date"]?.date?.start || "",
-    drips: txt("Drips") ? txt("Drips").split("\n").filter(Boolean) : [],
-    bp: txt("BP") || "—",
-    spo2: num("SpO2") || "—",
-    pulse: num("Pulse"),
-    temp: num("Temp"),
-    rr: num("RR"),
-    gcs: num("GCS"),
-    uop: num("UOP"),
-    rbs: num("RBS"),
-    vitalsTime: txt("Vitals Time") || "—",
-    notes: txt("Notes"),
-    meds: txt("Medications") ? txt("Medications").split("\n").filter(Boolean) : [],
-    labs: txt("Labs") ? txt("Labs").split("\n").filter(Boolean) : [],
-    vitalsHistory: [],
-    labHistory: [],
-    protocols: [],
-  };
-}
-
-function patientToNotion(pt) {
-  const txt = (v) => ({ rich_text: [{ text: { content: String(v || "") } }] });
-  return {
-    Name: { title: [{ text: { content: pt.name } }] },
-    Bed: txt(pt.bed),
-    Age: { number: parseInt(pt.age) || null },
-    Diagnosis: txt(pt.diagnosis),
-    Status: { select: { name: (pt.status.charAt(0).toUpperCase() + pt.status.slice(1)) } },
-    "Admit Date": { date: { start: pt.admitDate || new Date().toISOString().slice(0, 10) } },
-    Drips: txt(Array.isArray(pt.drips) ? pt.drips.join("\n") : pt.drips || ""),
-    BP: txt(pt.bp === "—" ? "" : pt.bp),
-    SpO2: { number: parseFloat(pt.spo2) || null },
-    Pulse: { number: parseFloat(pt.pulse) || null },
-    Temp:  { number: parseFloat(pt.temp) || null },
-    RR:    { number: parseFloat(pt.rr) || null },
-    GCS:   { number: parseFloat(pt.gcs) || null },
-    UOP:   { number: parseFloat(pt.uop) || null },
-    RBS:   { number: parseFloat(pt.rbs) || null },
-    "Vitals Time": txt(pt.vitalsTime === "—" ? "" : pt.vitalsTime),
-    Notes: txt(pt.notes),
-    Medications: txt(Array.isArray(pt.meds) ? pt.meds.join("\n") : ""),
-    Labs: txt(Array.isArray(pt.labs) ? pt.labs.join("\n") : ""),
-  };
 }
 
 function notionToTask(page) {
@@ -96,7 +37,6 @@ function notionToTask(page) {
   };
 }
 
-// ── Constants ──────────────────────────────────────────────────────────────
 const TEAM = ["Dr. Suraj", "Dr. Manoj", "Dr. Shamal", "Dr. Niranjan", "Dr. Sharvesh", "Nurse ICU"];
 
 const MONITORING_PROTOCOLS = [
@@ -124,7 +64,6 @@ const TC = {
 
 const t0 = () => new Date().toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" });
 
-// ── Small components ───────────────────────────────────────────────────────
 function Sparkline({data,color="#3b82f6",h=28,w=60}){
   const nums=data.map(Number).filter(n=>!isNaN(n)&&n>0);
   if(nums.length<2)return null;
@@ -177,7 +116,6 @@ const CBTN={background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:10,p
 const EBTN={background:"none",border:"1px solid #e2e8f0",color:"#3b82f6",fontSize:11,padding:"3px 10px",borderRadius:6,cursor:"pointer",fontWeight:600};
 const SMBTN={fontSize:12,fontWeight:600,padding:"5px 11px",borderRadius:8,cursor:"pointer"};
 
-// ── Main App ───────────────────────────────────────────────────────────────
 export default function App(){
   const [view,setView]=useState("ward");
   const [patients,setPatients]=useState([]);
@@ -190,21 +128,22 @@ export default function App(){
   const [lForm,setLForm]=useState({label:"",value:"",flag:"normal"});
   const [tForm,setTForm]=useState({text:"",assignedTo:TEAM[0],dueTime:"",patientId:"",priority:"high",notes:""});
   const [mForm,setMForm]=useState({patientId:"",protocols:[],assignTo:TEAM[0]});
-  const [ptForm,setPtForm]=useState({name:"",age:"",bed:"",diagnosis:"",status:"stable",drips:""});
-  const [notionDbId,setNotionDbId]=useState("");
+  const [ptForm,setPtForm]=useState({name:"",age:"",bed:"",diagnosis:"",attending:"Dr. Suraj",status:"stable",drips:""});
   const [aiMsgs,setAiMsgs]=useState([{role:"assistant",text:"Hi. I know all your patients. Ask for a clinical summary, handover note, vasopressor titration advice, or drug dose."}]);
   const [aiIn,setAiIn]=useState("");
   const [aiLoad,setAiLoad]=useState(false);
 
   useEffect(()=>{
-    fetch(`${PROXY}/api/notion/patients`)
+    // Load patients
+    fetch(`${PROXY}/api/patients`)
       .then(r=>r.json())
       .then(data=>{
-        if(data.results) setPatients(data.results.map(notionToPatient));
+        if(Array.isArray(data)) setPatients(data);
         setLoading(false);
       })
       .catch(()=>setLoading(false));
 
+    // Load tasks
     fetch(`${PROXY}/api/notion/tasks`)
       .then(r=>r.json())
       .then(data=>{
@@ -227,20 +166,10 @@ export default function App(){
     const entry={...vForm,time:t0()};
     const up={...pt,...Object.fromEntries(Object.entries(vForm).filter(([,v])=>v)),vitalsTime:t0(),vitalsHistory:[...(pt.vitalsHistory||[]),entry]};
     setPatients(prev=>prev.map(p=>p.id===sel?up:p));
-    await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`,{
+    await fetch(`${PROXY}/api/patients/${pt.notionId}`,{
       method:"PATCH",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        BP:{ rich_text:[{text:{content:vForm.bp||pt.bp||""}}] },
-        SpO2:{ number:parseFloat(vForm.spo2)||null },
-        Pulse:{ number:parseFloat(vForm.pulse)||null },
-        Temp:{ number:parseFloat(vForm.temp)||null },
-        RR:{ number:parseFloat(vForm.rr)||null },
-        GCS:{ number:parseFloat(vForm.gcs)||null },
-        UOP:{ number:parseFloat(vForm.uop)||null },
-        RBS:{ number:parseFloat(vForm.rbs)||null },
-        "Vitals Time":{ rich_text:[{text:{content:t0()}}] },
-      }),
+      body:JSON.stringify({...up,...vForm,vitalsTime:t0()}),
     });
     setVForm({});closeModal();
   };
@@ -252,12 +181,10 @@ export default function App(){
     const newLabs=[`${lForm.label} — ${lForm.value} [${t0()}]`,...pt.labs];
     const up={...pt,labs:newLabs,labHistory:[entry,...(pt.labHistory||[])]};
     setPatients(prev=>prev.map(p=>p.id===sel?up:p));
-    await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`,{
+    await fetch(`${PROXY}/api/patients/${pt.notionId}`,{
       method:"PATCH",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({
-        Labs:{ rich_text:[{text:{content:newLabs.join("\n")}}] },
-      }),
+      body:JSON.stringify({...pt,labs:newLabs}),
     });
     setLForm({label:"",value:"",flag:"normal"});closeModal();
   };
@@ -322,25 +249,25 @@ export default function App(){
       ...ptForm,
       drips:ptForm.drips?ptForm.drips.split("\n").filter(Boolean):[],
       admitDate:new Date().toISOString().slice(0,10),
-      bp:"—",spo2:"—",pulse:"—",temp:"—",rr:"—",
-      gcs:"—",uop:"—",rbs:"—",vitalsTime:"—",
+      bp:"",spo2:"",pulse:"",temp:"",rr:"",
+      gcs:"",uop:"",rbs:"",vitalsTime:"",
       notes:"",meds:[],labs:[],vitalsHistory:[],labHistory:[],protocols:[],
     };
     try{
-      const r=await fetch(`${PROXY}/api/notion/patients`,{
+      const r=await fetch(`${PROXY}/api/patients`,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(patientToNotion(pt)),
+        body:JSON.stringify(pt),
       });
       const data=await r.json();
       if(data.id){
-        setPatients(prev=>[notionToPatient(data),...prev]);
+        setPatients(prev=>[data,...prev]);
       } else {
-        alert("Error: "+(data.message||"Unknown error"));
+        alert("Error: "+(data.error||"Unknown error"));
         return;
       }
     }catch(e){console.error("Admit failed",e);}
-    setPtForm({name:"",age:"",bed:"",diagnosis:"",status:"stable",drips:""});
+    setPtForm({name:"",age:"",bed:"",diagnosis:"",attending:"Dr. Suraj",status:"stable",drips:""});
     closeModal();
   };
 
@@ -362,12 +289,10 @@ export default function App(){
     setPatients(prev=>prev.map(p=>p.id===id?{...p,status}:p));
     const pt=patients.find(p=>p.id===id);
     if(pt?.notionId){
-      await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`,{
+      await fetch(`${PROXY}/api/patients/${pt.notionId}`,{
         method:"PATCH",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          Status:{select:{name:status.charAt(0).toUpperCase()+status.slice(1)}},
-        }),
+        body:JSON.stringify({...pt,status}),
       });
     }
   };
@@ -376,12 +301,10 @@ export default function App(){
     setPatients(prev=>prev.map(p=>p.id===id?{...p,notes}:p));
     const pt=patients.find(p=>p.id===id);
     if(pt?.notionId){
-      await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`,{
+      await fetch(`${PROXY}/api/patients/${pt.notionId}`,{
         method:"PATCH",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({
-          Notes:{rich_text:[{text:{content:notes}}]},
-        }),
+        body:JSON.stringify({...pt,notes}),
       });
     }
   };
@@ -415,7 +338,6 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {overdue.length>0&&<div style={{background:"#450a0a",color:"#ef4444",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:20}}>⚠ {overdue.length} overdue</div>}
-          <button onClick={()=>setModal("setup")} style={{background:"#1e293b",border:"1px solid #334155",color:"#64748b",fontSize:11,padding:"4px 8px",borderRadius:7,cursor:"pointer"}}>⚙</button>
           <button onClick={()=>setModal("ai")} style={{background:"#1d4ed8",border:"none",color:"#fff",fontSize:11,padding:"5px 11px",borderRadius:8,cursor:"pointer",fontWeight:700}}>AI ✦</button>
         </div>
       </div>
@@ -448,7 +370,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
               </div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                 {[["BP",pt.bp,parseInt(pt.bp)<90],["SpO₂",`${pt.spo2}%`,parseInt(pt.spo2)<93],["HR",pt.pulse,parseInt(pt.pulse)>110],["UOP",`${pt.uop}ml/h`,parseInt(pt.uop)<20&&pt.uop]].map(([l,v,w])=>(
-                  v&&v!=="—%"&&<span key={l} style={{fontSize:10,color:w?"#fca5a5":"#94a3b8",fontFamily:"'DM Mono',monospace"}}><span style={{color:w?"#ef4444":"#475569"}}>{v}</span> {l}</span>
+                  v&&v!=="—%"&&v!=="%"&&<span key={l} style={{fontSize:10,color:w?"#fca5a5":"#94a3b8",fontFamily:"'DM Mono',monospace"}}><span style={{color:w?"#ef4444":"#475569"}}>{v}</span> {l}</span>
                 ))}
                 {pt.drips?.slice(0,2).map((d,i)=><span key={i} style={{fontSize:10,color:"#fb923c",background:"#431407",padding:"2px 6px",borderRadius:4}}>💉 {d.split(" ").slice(0,3).join(" ")}</span>)}
               </div>
@@ -589,12 +511,12 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
                 <Sec title="Latest Vitals" time={selPt.vitalsTime}>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:7}}>
                     {[
-                      {l:"BP",v:selPt.bp,u:"mmHg",w:parseInt(selPt.bp)<90,h:selPt.vitalsHistory?.map(x=>parseInt(x.bp)).filter(Boolean)},
-                      {l:"SpO₂",v:`${selPt.spo2}%`,u:"",w:parseInt(selPt.spo2)<93,h:selPt.vitalsHistory?.map(x=>parseInt(x.spo2)).filter(Boolean)},
-                      {l:"Pulse",v:selPt.pulse,u:"bpm",w:parseInt(selPt.pulse)>110,h:selPt.vitalsHistory?.map(x=>parseInt(x.pulse)).filter(Boolean)},
-                      {l:"Temp",v:selPt.temp,u:"°C",w:parseFloat(selPt.temp)>38.5,h:selPt.vitalsHistory?.map(x=>parseFloat(x.temp)).filter(Boolean)},
-                      {l:"RR",v:selPt.rr,u:"/min",w:parseInt(selPt.rr)>25,h:selPt.vitalsHistory?.map(x=>parseInt(x.rr)).filter(Boolean)},
-                      {l:"GCS",v:selPt.gcs,u:"/15",w:parseInt(selPt.gcs)<13,h:selPt.vitalsHistory?.map(x=>parseInt(x.gcs)).filter(Boolean)},
+                      {l:"BP",v:selPt.bp||"—",u:"mmHg",w:parseInt(selPt.bp)<90,h:selPt.vitalsHistory?.map(x=>parseInt(x.bp)).filter(Boolean)},
+                      {l:"SpO₂",v:selPt.spo2?`${selPt.spo2}%`:"—",u:"",w:parseInt(selPt.spo2)<93,h:selPt.vitalsHistory?.map(x=>parseInt(x.spo2)).filter(Boolean)},
+                      {l:"Pulse",v:selPt.pulse||"—",u:"bpm",w:parseInt(selPt.pulse)>110,h:selPt.vitalsHistory?.map(x=>parseInt(x.pulse)).filter(Boolean)},
+                      {l:"Temp",v:selPt.temp||"—",u:"°C",w:parseFloat(selPt.temp)>38.5,h:selPt.vitalsHistory?.map(x=>parseFloat(x.temp)).filter(Boolean)},
+                      {l:"RR",v:selPt.rr||"—",u:"/min",w:parseInt(selPt.rr)>25,h:selPt.vitalsHistory?.map(x=>parseInt(x.rr)).filter(Boolean)},
+                      {l:"GCS",v:selPt.gcs||"—",u:"/15",w:parseInt(selPt.gcs)<13,h:selPt.vitalsHistory?.map(x=>parseInt(x.gcs)).filter(Boolean)},
                       {l:"UOP",v:selPt.uop||"—",u:"ml/hr",w:parseInt(selPt.uop)<20&&selPt.uop,h:selPt.vitalsHistory?.map(x=>parseInt(x.uop)).filter(Boolean)},
                       {l:"RBS",v:selPt.rbs||"—",u:"mg/dL",w:parseInt(selPt.rbs)>250||parseInt(selPt.rbs)<70,h:selPt.vitalsHistory?.map(x=>parseInt(x.rbs)).filter(Boolean)},
                     ].map(({l,v,u,w,h})=>(
@@ -701,6 +623,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
                 <button onClick={()=>setModal("task")} style={{...SMBTN,background:"#3b82f6",color:"#fff",border:"none"}}>+ Task</button>
               </div>
             </div>
+            {tasks.length===0&&<div style={{color:"#cbd5e1",fontSize:13,textAlign:"center",marginTop:20}}>No tasks yet.</div>}
             {TEAM.map(member=>{
               const mt=tasks.filter(t=>t.assignedTo===member&&t.status!=="done");
               if(!mt.length)return null;
@@ -890,6 +813,12 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
             ))}
             <div><Lbl c="Active Drips (one per line)"/><textarea value={ptForm.drips} onChange={e=>setPtForm(p=>({...p,drips:e.target.value}))} rows={3} style={{...INP,resize:"none",fontFamily:"'DM Sans',sans-serif"}} placeholder={"Noradrenaline 0.2 mcg/kg/min\nVasopressin 0.03 U/min"}/></div>
             <div>
+              <Lbl c="Attending"/>
+              <select value={ptForm.attending} onChange={e=>setPtForm(p=>({...p,attending:e.target.value}))} style={INP}>
+                {["Dr. Suraj","Dr. Manoj","Dr. Shamal","Dr. Niranjan","Dr. Sharvesh","Other"].map(d=><option key={d}>{d}</option>)}
+              </select>
+            </div>
+            <div>
               <Lbl c="Initial Status"/>
               <div style={{display:"flex",gap:6}}>
                 {["stable","review","critical"].map(s=>{const sc=SC[s];return(
@@ -902,20 +831,6 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
               <button onClick={closeModal} style={{...CBTN,flex:1}}>Cancel</button>
             </div>
           </div>
-        </Mdl>
-      )}
-
-      {/* SETUP MODAL */}
-      {modal==="setup"&&(
-        <Mdl title="Notion Setup" onClose={closeModal}>
-          <div style={{fontSize:13,color:"#64748b",lineHeight:1.7,marginBottom:12}}>
-            1. Create a Notion database — <strong style={{color:"#0f172a"}}>Ward Patients — Unit 2</strong><br/>
-            2. Copy the database ID from the URL<br/>
-            3. Paste below — all data syncs automatically
-          </div>
-          <Lbl c="Notion Database ID"/>
-          <input value={notionDbId} onChange={e=>setNotionDbId(e.target.value)} style={{...INP,fontFamily:"'DM Mono',monospace",marginBottom:12}} placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"/>
-          <button onClick={closeModal} style={SBTN}>Save Configuration</button>
         </Mdl>
       )}
 
