@@ -211,8 +211,8 @@ export default function App(){
       method:"PATCH",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        BP: { number: parseFloat(vForm.pulse)||null },
-        SpO2: { number: parseFloat(vForm.pulse)||null },
+        BP: { rich_text:[{text:{content:vForm.bp||pt.bp||""}}] },
+        SpO2: { number: parseFloat(vForm.spo2)||null },
         Pulse: { number: parseFloat(vForm.pulse)||null },
         Temp:  { number: parseFloat(vForm.temp)||null },
         RR:    { number: parseFloat(vForm.rr)||null },
