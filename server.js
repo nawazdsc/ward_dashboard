@@ -169,5 +169,40 @@ app.post("/api/claude", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// ── TASKS ─────────────────────────────────────────────────────────────────
+const TASKS_DB_ID = process.env.NOTION_TASKS_DB_ID;
+
+app.get("/api/notion/tasks", async (req, res) => {
+  try {
+    const r = await fetch(`https://api.notion.com/v1/databases/${TASKS_DB_ID}/query`, {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({ sorts: [{ property: "Status", direction: "ascending" }] }),
+    });
+    res.json(await r.json());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/notion/tasks", async (req, res) => {
+  try {
+    const r = await fetch("https://api.notion.com/v1/pages", {
+      method: "POST",
+      headers: notionHeaders,
+      body: JSON.stringify({ parent: { database_id: TASKS_DB_ID }, properties: req.body }),
+    });
+    res.json(await r.json());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch("/api/notion/tasks/:id", async (req, res) => {
+  try {
+    const r = await fetch(`https://api.notion.com/v1/pages/${req.params.id}`, {
+      method: "PATCH",
+      headers: notionHeaders,
+      body: JSON.stringify({ properties: req.body }),
+    });
+    res.json(await r.json());
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 app.listen(3001, () => console.log("Server running on :3001"));
