@@ -63,7 +63,7 @@ function patientToNotion(pt) {
     "Admit Date": { date: { start: pt.admitDate || new Date().toISOString().slice(0, 10) } },
     Drips: txt(Array.isArray(pt.drips) ? pt.drips.join("\n") : pt.drips || ""),
     BP: txt(pt.bp === "—" ? "" : pt.bp),
-    SpO2: { number: parseFloat(pt.spo2) || null },   // ← fixed to number
+    SpO2: { number: parseFloat(pt.spo2) || null },
     Pulse: { number: parseFloat(pt.pulse) || null },
     Temp:  { number: parseFloat(pt.temp) || null },
     RR:    { number: parseFloat(pt.rr) || null },
@@ -74,6 +74,25 @@ function patientToNotion(pt) {
     Notes: txt(pt.notes),
     Medications: txt(Array.isArray(pt.meds) ? pt.meds.join("\n") : ""),
     Labs: txt(Array.isArray(pt.labs) ? pt.labs.join("\n") : ""),
+  };
+}
+
+function notionToTask(page) {
+  const p = page.properties;
+  const txt = (f) => p[f]?.rich_text?.[0]?.plain_text || "";
+  return {
+    id: page.id,
+    notionId: page.id,
+    text: p.Task?.title?.[0]?.plain_text || "",
+    patientName: txt("Patient Name"),
+    bed: txt("Bed"),
+    assignedTo: txt("Assigned To"),
+    dueTime: txt("Due Time"),
+    priority: p.Priority?.select?.name?.toLowerCase() || "high",
+    status: p.Status?.select?.name?.toLowerCase() || "pending",
+    notes: txt("Notes"),
+    isMonitoring: false,
+    patientId: txt("Patient Name"),
   };
 }
 
@@ -104,10 +123,6 @@ const TC = {
 };
 
 const t0 = () => new Date().toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit" });
-
-const SEED_TASKS = [
-  {id:"t1",patientId:"",patientName:"",bed:"",text:"BP check — Norad drip 1 hourly (target MAP ≥65)",assignedTo:"Resident 1",dueTime:"08:00",status:"pending",priority:"high",isMonitoring:true,protocol:"bp_1h"},
-];
 
 // ── Small components ───────────────────────────────────────────────────────
 function Sparkline({data,color="#3b82f6",h=28,w=60}){
@@ -167,21 +182,20 @@ export default function App(){
   const [view,setView]=useState("ward");
   const [patients,setPatients]=useState([]);
   const [loading,setLoading]=useState(true);
-  const [tasks,setTasks]=useState(SEED_TASKS);
+  const [tasks,setTasks]=useState([]);
   const [sel,setSel]=useState(null);
   const [dtab,setDtab]=useState("vitals");
   const [modal,setModal]=useState(null);
   const [vForm,setVForm]=useState({});
   const [lForm,setLForm]=useState({label:"",value:"",flag:"normal"});
-  const [tForm,setTForm]=useState({text:"",assignedTo:TEAM[1],dueTime:"",patientId:"",priority:"high",notes:""});
-  const [mForm,setMForm]=useState({patientId:"",protocols:[],assignTo:TEAM[1]});
-  const [ptForm,setPtForm]=useState({name:"",age:"",bed:"",diagnosis:"",attending:"Dr. Saili",status:"stable",drips:""});
+  const [tForm,setTForm]=useState({text:"",assignedTo:TEAM[0],dueTime:"",patientId:"",priority:"high",notes:""});
+  const [mForm,setMForm]=useState({patientId:"",protocols:[],assignTo:TEAM[0]});
+  const [ptForm,setPtForm]=useState({name:"",age:"",bed:"",diagnosis:"",status:"stable",drips:""});
   const [notionDbId,setNotionDbId]=useState("");
   const [aiMsgs,setAiMsgs]=useState([{role:"assistant",text:"Hi. I know all your patients. Ask for a clinical summary, handover note, vasopressor titration advice, or drug dose."}]);
   const [aiIn,setAiIn]=useState("");
   const [aiLoad,setAiLoad]=useState(false);
 
-  // Load patients from Notion on mount
   useEffect(()=>{
     fetch(`${PROXY}/api/notion/patients`)
       .then(r=>r.json())
@@ -190,13 +204,20 @@ export default function App(){
         setLoading(false);
       })
       .catch(()=>setLoading(false));
+
+    fetch(`${PROXY}/api/notion/tasks`)
+      .then(r=>r.json())
+      .then(data=>{
+        if(data.results) setTasks(data.results.map(notionToTask));
+      })
+      .catch(()=>{});
   },[]);
 
   const selPt=patients.find(p=>p.id===sel);
   const critical=patients.filter(p=>p.status==="critical");
   const pending=tasks.filter(t=>t.status==="pending"||t.status==="overdue");
   const overdue=tasks.filter(t=>t.status==="overdue");
-  const ptTasks=tasks.filter(t=>t.patientId===sel);
+  const ptTasks=tasks.filter(t=>t.patientId===sel||t.patientName===selPt?.name);
 
   const closeModal=()=>setModal(null);
 
@@ -206,20 +227,19 @@ export default function App(){
     const entry={...vForm,time:t0()};
     const up={...pt,...Object.fromEntries(Object.entries(vForm).filter(([,v])=>v)),vitalsTime:t0(),vitalsHistory:[...(pt.vitalsHistory||[]),entry]};
     setPatients(prev=>prev.map(p=>p.id===sel?up:p));
-    // Sync vitals to Notion
-    await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`, {
+    await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`,{
       method:"PATCH",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        BP: { rich_text:[{text:{content:vForm.bp||pt.bp||""}}] },
-        SpO2: { number: parseFloat(vForm.spo2)||null },
-        Pulse: { number: parseFloat(vForm.pulse)||null },
-        Temp:  { number: parseFloat(vForm.temp)||null },
-        RR:    { number: parseFloat(vForm.rr)||null },
-        GCS:   { number: parseFloat(vForm.gcs)||null },
-        UOP:   { number: parseFloat(vForm.uop)||null },
-        RBS:   { number: parseFloat(vForm.rbs)||null },
-        "Vitals Time": { rich_text:[{text:{content:t0()}}] },
+        BP:{ rich_text:[{text:{content:vForm.bp||pt.bp||""}}] },
+        SpO2:{ number:parseFloat(vForm.spo2)||null },
+        Pulse:{ number:parseFloat(vForm.pulse)||null },
+        Temp:{ number:parseFloat(vForm.temp)||null },
+        RR:{ number:parseFloat(vForm.rr)||null },
+        GCS:{ number:parseFloat(vForm.gcs)||null },
+        UOP:{ number:parseFloat(vForm.uop)||null },
+        RBS:{ number:parseFloat(vForm.rbs)||null },
+        "Vitals Time":{ rich_text:[{text:{content:t0()}}] },
       }),
     });
     setVForm({});closeModal();
@@ -232,12 +252,11 @@ export default function App(){
     const newLabs=[`${lForm.label} — ${lForm.value} [${t0()}]`,...pt.labs];
     const up={...pt,labs:newLabs,labHistory:[entry,...(pt.labHistory||[])]};
     setPatients(prev=>prev.map(p=>p.id===sel?up:p));
-    // Sync labs to Notion
-    await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`, {
+    await fetch(`${PROXY}/api/notion/patients/${pt.notionId}`,{
       method:"PATCH",
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({
-        Labs: { rich_text:[{text:{content:newLabs.join("\n")}}] },
+        Labs:{ rich_text:[{text:{content:newLabs.join("\n")}}] },
       }),
     });
     setLForm({label:"",value:"",flag:"normal"});closeModal();
@@ -251,17 +270,50 @@ export default function App(){
     setPatients(prev=>prev.map(p=>p.id===mForm.patientId?{...p,protocols:newProtos}:p));
     const newTasks=mForm.protocols.map(pid=>{
       const proto=MONITORING_PROTOCOLS.find(x=>x.id===pid);
-      return{id:`t${Date.now()}_${pid}`,patientId:mForm.patientId,patientName:pt.name,bed:pt.bed,text:proto.label,assignedTo:mForm.assignTo,dueTime:t0(),status:"pending",priority:"high",isMonitoring:true,protocol:pid};
+      return{id:`t${Date.now()}_${pid}`,notionId:null,patientId:mForm.patientId,patientName:pt.name,bed:pt.bed,text:proto.label,assignedTo:mForm.assignTo,dueTime:t0(),status:"pending",priority:"high",isMonitoring:true,protocol:pid,notes:""};
     });
     setTasks(prev=>[...newTasks,...prev]);
-    setMForm({patientId:"",protocols:[],assignTo:TEAM[1]});closeModal();
+    setMForm({patientId:"",protocols:[],assignTo:TEAM[0]});closeModal();
   };
 
-  const addTask=()=>{
-    if(!tForm.text||!tForm.patientId)return;
+  const addTask=async()=>{
+    if(!tForm.text||!tForm.patientId){
+      alert("Please select a patient first!");
+      return;
+    }
     const pt=patients.find(p=>p.id===tForm.patientId);
-    setTasks(prev=>[{id:`t${Date.now()}`,patientName:pt?.name||"—",bed:pt?.bed||"—",...tForm,status:"pending",isMonitoring:false},...prev]);
-    setTForm({text:"",assignedTo:TEAM[1],dueTime:"",patientId:"",priority:"high",notes:""});closeModal();
+    const newTask={
+      id:`t${Date.now()}`,
+      notionId:null,
+      patientName:pt?.name||"—",
+      bed:pt?.bed||"—",
+      ...tForm,
+      status:"pending",
+      isMonitoring:false,
+    };
+    setTasks(prev=>[newTask,...prev]);
+    setTForm({text:"",assignedTo:TEAM[0],dueTime:"",patientId:"",priority:"high",notes:""});
+    closeModal();
+    try{
+      const r=await fetch(`${PROXY}/api/notion/tasks`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          Task:{ title:[{text:{content:tForm.text}}] },
+          "Patient Name":{ rich_text:[{text:{content:pt?.name||""}}] },
+          Bed:{ rich_text:[{text:{content:pt?.bed||""}}] },
+          "Assigned To":{ rich_text:[{text:{content:tForm.assignedTo}}] },
+          "Due Time":{ rich_text:[{text:{content:tForm.dueTime}}] },
+          Priority:{ select:{ name:tForm.priority.charAt(0).toUpperCase()+tForm.priority.slice(1) } },
+          Status:{ select:{ name:"Pending" } },
+          Notes:{ rich_text:[{text:{content:tForm.notes||""}}] },
+        }),
+      });
+      const data=await r.json();
+      if(data.id){
+        setTasks(prev=>prev.map(t=>t.id===newTask.id?{...t,notionId:data.id}:t));
+      }
+    }catch(e){console.error("Task sync failed",e);}
   };
 
   const addPt=async()=>{
@@ -281,16 +333,30 @@ export default function App(){
         body:JSON.stringify(patientToNotion(pt)),
       });
       const data=await r.json();
-      setPatients(prev=>[notionToPatient(data),...prev]);
-    }catch{
-      // fallback: add locally if Notion fails
-      setPatients(prev=>[{...pt,id:`p${Date.now()}`,notionId:null},...prev]);
-    }
-    setPtForm({name:"",age:"",bed:"",diagnosis:"",attending:"Dr. Saili",status:"stable",drips:""});
+      if(data.id){
+        setPatients(prev=>[notionToPatient(data),...prev]);
+      } else {
+        alert("Error: "+(data.message||"Unknown error"));
+        return;
+      }
+    }catch(e){console.error("Admit failed",e);}
+    setPtForm({name:"",age:"",bed:"",diagnosis:"",status:"stable",drips:""});
     closeModal();
   };
 
-  const updTaskStatus=(id,status)=>setTasks(prev=>prev.map(t=>t.id===id?{...t,status}:t));
+  const updTaskStatus=async(id,status)=>{
+    setTasks(prev=>prev.map(t=>t.id===id?{...t,status}:t));
+    const task=tasks.find(t=>t.id===id);
+    if(task?.notionId){
+      await fetch(`${PROXY}/api/notion/tasks/${task.notionId}`,{
+        method:"PATCH",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          Status:{select:{name:status.charAt(0).toUpperCase()+status.slice(1)}},
+        }),
+      });
+    }
+  };
 
   const updStatus=async(id,status)=>{
     setPatients(prev=>prev.map(p=>p.id===id?{...p,status}:p));
@@ -364,7 +430,6 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         ))}
       </div>
 
-      {/* LOADING */}
       {loading&&(
         <div style={{textAlign:"center",padding:"40px 20px",color:"#64748b",fontSize:13}}>
           Loading patients from Notion…
@@ -414,7 +479,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               {patients.map(pt=>{
                 const sc=SC[pt.status]||SC.stable;
-                const ptT=tasks.filter(t=>t.patientId===pt.id&&(t.status==="pending"||t.status==="overdue"));
+                const ptT=tasks.filter(t=>(t.patientId===pt.id||t.patientName===pt.name)&&(t.status==="pending"||t.status==="overdue"));
                 const bpH=pt.vitalsHistory?.map(v=>parseInt(v.bp)).filter(Boolean)||[];
                 return(
                   <div key={pt.id} onClick={()=>{setSel(pt.id);setView("patients");setDtab("vitals");}} style={{background:"#fff",borderRadius:12,padding:11,border:`1.5px solid ${pt.status==="critical"?"#fca5a5":"#e2e8f0"}`,cursor:"pointer"}}>
@@ -471,7 +536,6 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         {sel&&selPt&&(
           <div>
             <button onClick={()=>setSel(null)} style={{background:"none",border:"none",color:"#3b82f6",fontSize:13,cursor:"pointer",padding:"0 0 8px",fontWeight:500}}>← Back</button>
-            {/* Header */}
             <div style={{background:"#0c1526",borderRadius:14,padding:"13px 15px",marginBottom:8}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                 <div>
@@ -496,21 +560,18 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
               </div>
             </div>
 
-            {/* Quick actions */}
             <div style={{display:"flex",gap:6,marginBottom:8}}>
               {[["+ Vitals","#eff6ff","#1d4ed8","#bfdbfe",()=>setModal("vitals")],["+ Lab","#f0fdf4","#166534","#bbf7d0",()=>setModal("lab")],["+ Task","#fefce8","#854d0e","#fef08a",()=>{setTForm(f=>({...f,patientId:sel}));setModal("task");}],["Monitor","#fff7ed","#9a3412","#fed7aa",()=>{setMForm(f=>({...f,patientId:sel}));setModal("monitor");}]].map(([l,bg,col,bd,fn])=>(
                 <button key={l} onClick={fn} style={{flex:1,padding:"8px 0",background:bg,color:col,border:`1px solid ${bd}`,borderRadius:9,fontSize:12,fontWeight:700,cursor:"pointer"}}>{l}</button>
               ))}
             </div>
 
-            {/* Detail tabs */}
             <div style={{display:"flex",background:"#fff",borderRadius:10,border:"1px solid #e2e8f0",marginBottom:8,overflow:"hidden"}}>
               {["vitals","labs","notes","tasks"].map(t=>(
                 <button key={t} onClick={()=>setDtab(t)} style={{flex:1,padding:"9px 4px",background:dtab===t?"#0f172a":"transparent",border:"none",color:dtab===t?"#fff":"#64748b",fontSize:12,fontWeight:dtab===t?700:400,cursor:"pointer",textTransform:"capitalize"}}>{t}</button>
               ))}
             </div>
 
-            {/* VITALS TAB */}
             {dtab==="vitals"&&(
               <div>
                 {selPt.protocols?.length>0&&(
@@ -578,7 +639,6 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
               </div>
             )}
 
-            {/* LABS TAB */}
             {dtab==="labs"&&(
               <div>
                 {selPt.labHistory?.length>0&&(
@@ -614,10 +674,8 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
               </div>
             )}
 
-            {/* NOTES TAB */}
             {dtab==="notes"&&<NotesTab pt={selPt} onSave={notes=>saveNotes(sel,notes)}/>}
 
-            {/* TASKS TAB */}
             {dtab==="tasks"&&(
               <div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -696,7 +754,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         )}
       </div>
 
-      {/* ══ VITALS ENTRY MODAL ══ */}
+      {/* VITALS MODAL */}
       {modal==="vitals"&&(
         <Mdl title={`Record Vitals — ${selPt?.name}`} onClose={closeModal}>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
@@ -712,12 +770,12 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         </Mdl>
       )}
 
-      {/* ══ LAB ENTRY MODAL ══ */}
+      {/* LAB MODAL */}
       {modal==="lab"&&(
         <Mdl title={`Add Lab Result — ${selPt?.name||patients.find(p=>p.id===sel)?.name}`} onClose={closeModal}>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
-            <div><Lbl c="Test name"/><input value={lForm.label} onChange={e=>setLForm(f=>({...f,label:e.target.value}))} style={INP} placeholder="e.g. Lactate, ABG, CBC, Creatinine"/></div>
-            <div><Lbl c="Result / value"/><input value={lForm.value} onChange={e=>setLForm(f=>({...f,value:e.target.value}))} style={INP} placeholder="e.g. 4.2 mmol/L, pH 7.29 PaO₂ 58"/></div>
+            <div><Lbl c="Test name"/><input value={lForm.label} onChange={e=>setLForm(f=>({...f,label:e.target.value}))} style={INP} placeholder="e.g. Lactate, ABG, CBC"/></div>
+            <div><Lbl c="Result / value"/><input value={lForm.value} onChange={e=>setLForm(f=>({...f,value:e.target.value}))} style={INP} placeholder="e.g. 4.2 mmol/L"/></div>
             <div>
               <Lbl c="Flag"/>
               <div style={{display:"flex",gap:6}}>
@@ -734,15 +792,15 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         </Mdl>
       )}
 
-      {/* ══ MONITORING PROTOCOL MODAL ══ */}
+      {/* MONITOR MODAL */}
       {modal==="monitor"&&(
-        <Mdl title="Assign Monitoring Protocol" onClose={()=>{setMForm({patientId:"",protocols:[],assignTo:TEAM[1]});closeModal();}}>
+        <Mdl title="Assign Monitoring Protocol" onClose={()=>{setMForm({patientId:"",protocols:[],assignTo:TEAM[0]});closeModal();}}>
           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:14}}>
             <div>
               <Lbl c="Patient"/>
               <select value={mForm.patientId} onChange={e=>setMForm(f=>({...f,patientId:e.target.value}))} style={INP}>
                 <option value="">Select patient</option>
-                {patients.map(p=><option key={p.id} value={p.id}>{p.name} ({p.bed}) — {p.status}{p.drips?.length>0?` · ${p.drips.length} drip(s)`:""}</option>)}
+                {patients.map(p=><option key={p.id} value={p.id}>{p.name} ({p.bed}) — {p.status}</option>)}
               </select>
             </div>
             <div>
@@ -768,21 +826,15 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
                 {TEAM.map(m=><option key={m} value={m}>{m}</option>)}
               </select>
             </div>
-            {mForm.protocols.length>0&&mForm.patientId&&(
-              <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"8px 10px"}}>
-                <div style={{fontSize:12,color:"#166534",fontWeight:600}}>✓ Will create {mForm.protocols.length} monitoring task{mForm.protocols.length>1?"s":""} for {mForm.assignTo}</div>
-                <div style={{fontSize:11,color:"#4ade80",marginTop:2}}>Protocols added to patient record</div>
-              </div>
-            )}
           </div>
           <div style={{display:"flex",gap:8}}>
             <button onClick={assignMonitor} style={{...SBTN,flex:2}}>Assign Monitoring</button>
-            <button onClick={()=>{setMForm({patientId:"",protocols:[],assignTo:TEAM[1]});closeModal();}} style={{...CBTN,flex:1}}>Cancel</button>
+            <button onClick={()=>{setMForm({patientId:"",protocols:[],assignTo:TEAM[0]});closeModal();}} style={{...CBTN,flex:1}}>Cancel</button>
           </div>
         </Mdl>
       )}
 
-      {/* ══ TASK MODAL ══ */}
+      {/* TASK MODAL */}
       {modal==="task"&&(
         <Mdl title="Assign Task to Resident" onClose={closeModal}>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -795,7 +847,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
             </div>
             <div>
               <Lbl c="Task description"/>
-              <textarea value={tForm.text} onChange={e=>setTForm(f=>({...f,text:e.target.value}))} rows={3} style={{...INP,resize:"none",fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} placeholder="e.g. Check ABG and adjust NIV · Repeat ECG after dose"/>
+              <textarea value={tForm.text} onChange={e=>setTForm(f=>({...f,text:e.target.value}))} rows={3} style={{...INP,resize:"none",fontFamily:"'DM Sans',sans-serif",lineHeight:1.5}} placeholder="e.g. Check ABG and adjust NIV"/>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
               <div>
@@ -819,7 +871,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
             </div>
             <div>
               <Lbl c="Target / Notes (optional)"/>
-              <input value={tForm.notes} onChange={e=>setTForm(f=>({...f,notes:e.target.value}))} style={INP} placeholder="e.g. Target MAP ≥65, adjust if SBP <90"/>
+              <input value={tForm.notes} onChange={e=>setTForm(f=>({...f,notes:e.target.value}))} style={INP} placeholder="e.g. Target MAP ≥65"/>
             </div>
             <div style={{display:"flex",gap:8,marginTop:4}}>
               <button onClick={addTask} style={{...SBTN,flex:2}}>Assign Task</button>
@@ -829,20 +881,14 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         </Mdl>
       )}
 
-      {/* ══ ADD PATIENT ══ */}
+      {/* ADD PATIENT MODAL */}
       {modal==="addpt"&&(
         <Mdl title="Admit Patient" onClose={closeModal}>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {[["name","Full Name","text","Ramesh Patil"],["age","Age","number","55"],["bed","Bed / Location","text","ICU-4"],["diagnosis","Primary Diagnosis","text","Septic shock"]].map(([k,l,t,ph])=>(
-              <div key={k}><Lbl c={l}/><input type={t} value={ptForm[k]} onChange={e=>setPtForm(p=>({...p,[k]:e.target.value}))} style={INP} placeholder={ph}/></div>
+              <div key={k}><Lbl c={l}/><input type={t} value={ptForm[k]||""} onChange={e=>setPtForm(p=>({...p,[k]:e.target.value}))} style={INP} placeholder={ph}/></div>
             ))}
             <div><Lbl c="Active Drips (one per line)"/><textarea value={ptForm.drips} onChange={e=>setPtForm(p=>({...p,drips:e.target.value}))} rows={3} style={{...INP,resize:"none",fontFamily:"'DM Sans',sans-serif"}} placeholder={"Noradrenaline 0.2 mcg/kg/min\nVasopressin 0.03 U/min"}/></div>
-            <div>
-              <Lbl c="Attending"/>
-              <select value={ptForm.attending} onChange={e=>setPtForm(p=>({...p,attending:e.target.value}))} style={INP}>
-                {["Dr. Saili","Dr. Vishal","Dr. Deepa Banjan","Other"].map(d=><option key={d}>{d}</option>)}
-              </select>
-            </div>
             <div>
               <Lbl c="Initial Status"/>
               <div style={{display:"flex",gap:6}}>
@@ -859,7 +905,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         </Mdl>
       )}
 
-      {/* ══ SETUP ══ */}
+      {/* SETUP MODAL */}
       {modal==="setup"&&(
         <Mdl title="Notion Setup" onClose={closeModal}>
           <div style={{fontSize:13,color:"#64748b",lineHeight:1.7,marginBottom:12}}>
@@ -873,7 +919,7 @@ Be concise and clinically precise. Include MAP calculations, vasopressor endpoin
         </Mdl>
       )}
 
-      {/* ══ AI CHAT ══ */}
+      {/* AI CHAT */}
       {modal==="ai"&&(
         <div style={{position:"fixed",inset:0,background:"#0c1526",zIndex:200,maxWidth:480,margin:"0 auto",display:"flex",flexDirection:"column"}}>
           <div style={{padding:"13px 15px",borderBottom:"1px solid #1e293b",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
