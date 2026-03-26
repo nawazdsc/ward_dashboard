@@ -8,13 +8,18 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
     "concurrently": "^8",
+    "date-fns": "^4.1.0",
     "dotenv": "^16",
     "express": "^4",
     "git": "^0.1.5",
+    "groq-sdk": "^1.1.1",
     "node-fetch": "^3",
     "react": "^18",
-    "react-dom": "^18"
+    "react-dom": "^18",
+    "react-to-print": "^3.3.0",
+    "recharts": "^3.8.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",
