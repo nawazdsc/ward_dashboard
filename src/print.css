@@ -1,0 +1,235 @@
+/* =============================================================
+   Ward Dashboard — Print Stylesheet
+   Applied globally when the page is printed (media="print")
+   ============================================================= */
+
+@media print {
+  /* Hide interactive / screen-only elements */
+  .no-print {
+    display: none !important;
+  }
+
+  /* Remove editable borders when printing */
+  .editable {
+    border: none !important;
+  }
+
+  /* Show elements that should only appear in print */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Reset page background */
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Allow content to fill the full page width */
+  #root {
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Print Case Sheet
+--------------------------------------------------------------- */
+.print-case-sheet {
+  font-family: 'DM Sans', Arial, sans-serif;
+  color: #000;
+  padding: 20px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.print-case-sheet h1 {
+  text-align: center;
+  font-size: 16px;
+  margin: 0 0 2px;
+}
+
+.print-case-sheet h2 {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 400;
+  margin: 0 0 8px;
+  color: #555;
+}
+
+.print-case-sheet .divider {
+  border-top: 2px solid #000;
+  margin: 8px 0;
+}
+
+.print-case-sheet .thin-divider {
+  border-top: 1px solid #ccc;
+  margin: 6px 0;
+}
+
+.print-case-sheet .section-title {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: #333;
+  margin: 10px 0 4px;
+  letter-spacing: 0.5px;
+}
+
+.print-case-sheet .info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 16px;
+}
+
+.print-case-sheet .info-row {
+  display: flex;
+  gap: 4px;
+}
+
+.print-case-sheet .info-label {
+  font-weight: 700;
+  min-width: 80px;
+}
+
+.print-case-sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.print-case-sheet th,
+.print-case-sheet td {
+  border: 1px solid #ccc;
+  padding: 3px 5px;
+  text-align: left;
+}
+
+.print-case-sheet th {
+  background: #f0f0f0;
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.print-case-sheet .critical {
+  color: #c00;
+  font-weight: 700;
+}
+
+@media screen {
+  .print-case-sheet {
+    max-width: 480px;
+    margin: 0 auto;
+    background: #fff;
+  }
+}
+
+/* ---------------------------------------------------------------
+   Discharge Card
+--------------------------------------------------------------- */
+.discharge-card {
+  font-family: 'DM Sans', Arial, sans-serif;
+  color: #000;
+  padding: 24px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.discharge-card h1 {
+  text-align: center;
+  font-size: 18px;
+  margin: 0 0 2px;
+  font-weight: 700;
+}
+
+.discharge-card h2 {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 400;
+  margin: 0 0 4px;
+  color: #555;
+}
+
+.discharge-card h3 {
+  text-align: center;
+  font-size: 14px;
+  margin: 8px 0;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.discharge-card .hdr-line {
+  border-top: 2px solid #000;
+  margin: 8px 0;
+}
+
+.discharge-card .sec-title {
+  font-weight: 700;
+  font-size: 12px;
+  text-transform: uppercase;
+  margin: 12px 0 4px;
+  border-bottom: 1px solid #999;
+  padding-bottom: 2px;
+}
+
+.discharge-card .info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 20px;
+  margin-bottom: 8px;
+}
+
+.discharge-card .info-row {
+  display: flex;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.discharge-card .info-label {
+  font-weight: 700;
+  min-width: 110px;
+}
+
+.discharge-card table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 4px 0;
+}
+
+.discharge-card th,
+.discharge-card td {
+  border: 1px solid #bbb;
+  padding: 3px 6px;
+  text-align: left;
+}
+
+.discharge-card th {
+  background: #eee;
+  font-weight: 700;
+}
+
+.discharge-card .editable {
+  border: 1px dashed #aaa;
+  padding: 6px 8px;
+  min-height: 40px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  cursor: text;
+}
+
+@media print {
+  .discharge-card .no-print {
+    display: none !important;
+  }
+}
+
+@media screen {
+  .discharge-card {
+    max-width: 480px;
+    margin: 0 auto;
+    background: #fff;
+  }
+}
