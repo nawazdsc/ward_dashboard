@@ -1,0 +1,59 @@
+@media print {
+  * {
+    background: transparent;
+    color: black;
+    box-shadow: none;
+    text-shadow: none;
+  }
+
+  body {
+    font-size: 12pt;
+    line-height: 1.5;
+    margin: 0;
+    padding: 0;
+  }
+
+  .app-header, .app-footer, .tab-navigation {
+    display: none;
+  }
+
+  .tab-content {
+    page-break-inside: avoid;
+    margin: 0;
+    padding: 20pt;
+  }
+
+  h1, h2, h3 {
+    page-break-after: avoid;
+    margin-top: 0;
+  }
+
+  p {
+    orphans: 3;
+    widows: 3;
+  }
+
+  a {
+    text-decoration: underline;
+  }
+
+  img {
+    max-width: 100%;
+    page-break-inside: avoid;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  th, td {
+    border: 1px solid black;
+    padding: 8pt;
+    text-align: left;
+  }
+
+  @page {
+    margin: 2cm;
+  }
+}
