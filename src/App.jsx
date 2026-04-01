@@ -52,21 +52,21 @@ export default function App(){
 
   const loadPatients=useCallback(async()=>{try{const data=await api('/patients');setPatients(data);return data;}catch(err){console.error(err);return[];}},[]);
   const loadTasks=useCallback(async()=>{try{setTasks(await api('/tasks'));}catch{}},[]);
-  const loadAllData=useCallback(async(pts)=>{const vO={},dO={},lO={};await Promise.all(pts.map(async p=>{try{vO[p.id]=await api(`/vitals/${p.id}`);dO[p.id]=await api(`/drugs/${p.id}`);lO[p.id]=await api(`/labs/${p.id}`);}catch{}}));setAllVitals(vO);setAllDrugs(dO);setAllLabs(lO);},[]);
-  useEffect(()=>{(async()=>{setLoading(true);const pts=await loadPatients();await Promise.all([loadTasks(),loadAllData(pts)]);setLoading(false);})();},[loadPatients,loadTasks,loadAllData]);
-  const loadDetail=useCallback(async(pid)=>{try{const[v,l,d,f]=await Promise.all([api(`/vitals/${pid}`),api(`/labs/${pid}`),api(`/drugs/${pid}`),api(`/files/${pid}`)]);setVitals(v);setLabs(l);setDrugs(d);setFiles(f);}catch(err){console.error(err);}},[]);
-  const refreshAll=async()=>{const pts=await loadPatients();await Promise.all([loadTasks(),loadAllData(pts)]);if(sel)loadDetail(sel);};
+  useEffect(()=>{(async()=>{setLoading(true);await Promise.all([loadPatients(),loadTasks()]);setLoading(false);})();},[loadPatients,loadTasks]);
+  const loadDetail=useCallback(async(pid)=>{try{const[v,l,d,f]=await Promise.all([api(`/vitals/${pid}`),api(`/labs/${pid}`),api(`/drugs/${pid}`),api(`/files/${pid}`)]);setVitals(v);setLabs(l);setDrugs(d);setFiles(f);setAllVitals(prev=>({...prev,[pid]:v}));setAllLabs(prev=>({...prev,[pid]:l}));setAllDrugs(prev=>({...prev,[pid]:d}));}catch(err){console.error(err);}},[]);
+  const loadLabsForAll=useCallback(async(pts)=>{const lO={};await Promise.all(pts.map(async p=>{try{lO[p.id]=await api(`/labs/${p.id}`);}catch{}}));setAllLabs(lO);},[]);
+  const refreshAll=async()=>{const pts=await loadPatients();await loadTasks();if(sel)loadDetail(sel);};
 
   const selPt=patients.find(p=>p.id===sel);const critical=patients.filter(p=>p.status==='critical');const activePatients=patients.filter(p=>p.status!=='discharged');const pending=tasks.filter(t=>t.status==='pending'||t.status==='overdue');const overdue=tasks.filter(t=>t.status==='overdue');const ptTasks=tasks.filter(t=>t.patient_id===sel);
 
-  const saveVitals=async()=>{if(!sel)return;try{await api(`/vitals/${sel}`,'POST',vForm);setVForm({});closeModal();await refreshAll();loadDetail(sel);}catch(err){alert(err.message);}};
-  const saveLab=async()=>{const pid=sel;if(!pid||!lForm.test_name||!lForm.value)return;try{await api(`/labs/${pid}`,'POST',{test_name:lForm.test_name,value:lForm.value,flag:lForm.flag});setLForm({test_name:'',value:'',flag:'normal'});closeModal();await refreshAll();if(sel)loadDetail(sel);}catch(err){alert(err.message);}};
+  const saveVitals=async()=>{if(!sel)return;try{await api(`/vitals/${sel}`,'POST',vForm);setVForm({});closeModal();await loadPatients();loadDetail(sel);}catch(err){alert(err.message);}};
+  const saveLab=async()=>{const pid=sel;if(!pid||!lForm.test_name||!lForm.value)return;try{await api(`/labs/${pid}`,'POST',{test_name:lForm.test_name,value:lForm.value,flag:lForm.flag});setLForm({test_name:'',value:'',flag:'normal'});closeModal();loadDetail(pid);}catch(err){alert(err.message);}};
   const addTask=async()=>{const pid=tForm.patientId||sel;if(!tForm.task||!pid){alert('Select patient & enter task');return;}const pt=patients.find(p=>p.id===pid);try{await api('/tasks','POST',{task:tForm.task,assigned_to:tForm.assigned_to,due_time:tForm.due_time,priority:tForm.priority,notes:tForm.notes,patient_id:pid,patient_name:pt?.name,bed:pt?.bed});setTForm({task:'',assigned_to:TEAM[0],due_time:'',patientId:'',priority:'high',notes:''});closeModal();await loadTasks();}catch(err){alert(err.message);}};
-  const addPt=async()=>{if(!ptForm.name||!ptForm.bed)return;try{await api('/patients','POST',ptForm);setPtForm({name:'',age:'',bed:'',diagnosis:'',attending:TEAM[0],status:'stable',drips:''});closeModal();await refreshAll();}catch(err){alert(err.message);}};
+  const addPt=async()=>{if(!ptForm.name||!ptForm.bed)return;try{await api('/patients','POST',ptForm);setPtForm({name:'',age:'',bed:'',diagnosis:'',attending:TEAM[0],status:'stable',drips:''});closeModal();await loadPatients();}catch(err){alert(err.message);}};
   const assignMonitor=async()=>{if(!mForm.patientId||!mForm.protocols.length)return;const pt=patients.find(p=>p.id===mForm.patientId);if(!pt)return;for(const pid of mForm.protocols){const proto=MONITORING_PROTOCOLS.find(x=>x.id===pid);if(!proto)continue;try{await api('/tasks','POST',{task:proto.label,assigned_to:mForm.assignTo,due_time:t0(),priority:'high',notes:`Every ${proto.interval} min · ${proto.vitals.join(', ')}`,patient_id:mForm.patientId,patient_name:pt.name,bed:pt.bed});}catch{}}setMForm({patientId:'',protocols:[],assignTo:TEAM[0]});closeModal();await loadTasks();};
   const updTaskStatus=async(id,status)=>{try{await api(`/tasks/${id}`,'PATCH',{status});await loadTasks();}catch(err){alert(err.message);}};
-  const updStatus=async(id,status)=>{try{await api(`/patients/${id}`,'PATCH',{status});await refreshAll();}catch(err){alert(err.message);}};
-  const saveNotes=async(id,notes)=>{try{await api(`/patients/${id}`,'PATCH',{notes});await refreshAll();}catch(err){alert(err.message);}};
+  const updStatus=async(id,status)=>{try{await api(`/patients/${id}`,'PATCH',{status});await loadPatients();}catch(err){alert(err.message);}};
+  const saveNotes=async(id,notes)=>{try{await api(`/patients/${id}`,'PATCH',{notes});await loadPatients();}catch(err){alert(err.message);}};
   const discharge=async()=>{if(!window.confirm('Discharge?'))return;await updStatus(sel,'discharged');setSel(null);setView('ward');};
 
   const sendAi=async()=>{if(!aiIn.trim()||aiLoad)return;const msg=aiIn;setAiIn('');setAiMsgs(m=>[...m,{role:'user',text:msg}]);setAiLoad(true);try{const ctx=`Clinical ward AI, Unit 2, CSM Hospital Kalwa.\nCritical: ${JSON.stringify(critical.map(p=>({name:p.name,bed:p.bed,diagnosis:p.diagnosis,drips:p.drips,bp:p.bp,spo2:p.spo2,pulse:p.pulse,gcs:p.gcs,uop:p.uop})))}.\nAll: ${JSON.stringify(patients.map(p=>({name:p.name,bed:p.bed,diag:p.diagnosis,status:p.status,bp:p.bp,spo2:p.spo2,pulse:p.pulse})))}.\nPending: ${JSON.stringify(pending.map(t=>({text:t.task,patient:t.patient_name,assigned:t.assigned_to,due:t.due_time,status:t.status})))}.\nBe concise, clinically precise.`;const res=await api('/ai','POST',{system:ctx,messages:[{role:'user',content:msg}],max_tokens:1200});setAiMsgs(m=>[...m,{role:'assistant',text:res.text||'Try again.'}]);}catch{setAiMsgs(m=>[...m,{role:'assistant',text:'Connection error.'}]);}setAiLoad(false);};
@@ -116,7 +116,7 @@ export default function App(){
       {/* NAV TABS */}
       <div style={{display:'flex',background:'#fff',borderBottom:'1px solid #e2e8f0',position:'sticky',top:60,zIndex:90}}>
         {[{k:'ward',l:'Ward'},{k:'patients',l:'Patients'},{k:'tasks',l:`Tasks${pending.length>0?` (${pending.length})`:''}`},{k:'labs',l:'Labs'}].map(tab=>(
-          <button key={tab.k} onClick={()=>{setView(tab.k);setSel(null);}} style={{flex:1,padding:'10px 4px',background:'none',border:'none',borderBottom:view===tab.k&&!sel?'2px solid #3b82f6':'2px solid transparent',color:view===tab.k&&!sel?'#1e40af':'#64748b',fontSize:13,fontWeight:view===tab.k&&!sel?700:400,cursor:'pointer'}}>{tab.l}</button>
+          <button key={tab.k} onClick={()=>{setView(tab.k);setSel(null);if(tab.k==='labs')loadLabsForAll(patients);}} style={{flex:1,padding:'10px 4px',background:'none',border:'none',borderBottom:view===tab.k&&!sel?'2px solid #3b82f6':'2px solid transparent',color:view===tab.k&&!sel?'#1e40af':'#64748b',fontSize:13,fontWeight:view===tab.k&&!sel?700:400,cursor:'pointer'}}>{tab.l}</button>
         ))}
       </div>
 
