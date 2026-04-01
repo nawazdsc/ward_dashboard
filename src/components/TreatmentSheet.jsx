@@ -38,7 +38,9 @@ export default function TreatmentSheet({ drugs, onAddDrug, onToggleDrug, patient
     const planned_end_date = form.planned_days
       ? format(addDays(today, parseInt(form.planned_days) - 1), "yyyy-MM-dd")
       : null;
-    onAddDrug({ ...form, start_date, planned_end_date, is_active: true });
+    // Destructure out planned_days so it's NOT sent to Supabase
+    const { planned_days, ...rest } = form;
+    onAddDrug({ ...rest, start_date, planned_end_date, is_active: true });
     setForm({ name: "", dose: "", frequency: "", route: "IV", indication: "", planned_days: "" });
     setShow(false);
   };
@@ -54,7 +56,7 @@ export default function TreatmentSheet({ drugs, onAddDrug, onToggleDrug, patient
   };
 
   return (
-    <div style={{ background: "#fff", borderRadius: 11, padding: "11px 13px", marginBottom: 8, border: "1px solid #f1f5f9" }}>
+    <div style={{ background: "#fff", borderRadius: 12, padding: "11px 13px", marginBottom: 8, border: "none", boxShadow: "0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 9 }}>
         <span style={{ fontWeight: 700, fontSize: 11, color: "#0f172a", textTransform: "uppercase", letterSpacing: "0.5px" }}>Treatment Sheet</span>
         <button onClick={() => setShow(!show)} style={{ fontSize: 11, color: "#3b82f6", background: "#eff6ff", border: "1px solid #bfdbfe", padding: "3px 10px", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>+ Drug</button>
