@@ -8,6 +8,7 @@ import LabChart from './components/LabChart';
 import ShiftHandover from './components/ShiftHandover';
 import Notifications from './components/Notifications';
 import FileUpload from './components/FileUpload';
+import ContinuationSheet, { ContinuationSheetEditor } from './components/ContinuationSheet';
 
 const PROXY = '/api';
 const api = async (path, method = 'GET', body) => {
@@ -45,9 +46,10 @@ export default function App(){
   const [vForm,setVForm]=useState({});const [lForm,setLForm]=useState({test_name:'',value:'',flag:'normal'});const [tForm,setTForm]=useState({task:'',assigned_to:TEAM[0],due_time:'',patientId:'',priority:'high',notes:''});const [ptForm,setPtForm]=useState({name:'',age:'',bed:'',diagnosis:'',attending:TEAM[0],status:'stable',drips:''});const [mForm,setMForm]=useState({patientId:'',protocols:[],assignTo:TEAM[0]});
   const [aiMsgs,setAiMsgs]=useState([{role:'assistant',text:'Hi. I know all your patients. Ask for a clinical summary, handover note, vasopressor titration advice, or drug dose.'}]);const [aiIn,setAiIn]=useState('');const [aiLoad,setAiLoad]=useState(false);
   const [aiCourse,setAiCourse]=useState('');const [extraFields,setExtraFields]=useState({});
-  const printCaseRef=useRef(null);const printDischargeRef=useRef(null);const printHandoverRef=useRef(null);
-  const printCaseSheet=useReactToPrint({contentRef:printCaseRef});const printDischarge=useReactToPrint({contentRef:printDischargeRef});const printHandover=useReactToPrint({contentRef:printHandoverRef});
+  const printCaseRef=useRef(null);const printDischargeRef=useRef(null);const printHandoverRef=useRef(null);const printContRef=useRef(null);
+  const printCaseSheet=useReactToPrint({contentRef:printCaseRef});const printDischarge=useReactToPrint({contentRef:printDischargeRef});const printHandover=useReactToPrint({contentRef:printHandoverRef});const printContSheet=useReactToPrint({contentRef:printContRef});
   const [handoverOut,setHandoverOut]=useState('');const [handoverIn,setHandoverIn]=useState('');const [allVitals,setAllVitals]=useState({});const [allDrugs,setAllDrugs]=useState({});
+  const [contForm,setContForm]=useState(null);
   const closeModal=()=>setModal(null);const t0=()=>new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
 
   const loadPatients=useCallback(async()=>{try{const data=await api('/patients');setPatients(data);return data;}catch(err){console.error(err);return[];}},[]);
@@ -75,7 +77,7 @@ export default function App(){
   const generateHospitalCourse=async()=>{const context=`Patient: ${selPt?.name}, ${selPt?.age}y\nAdmitted: ${selPt?.admit_date}, Bed: ${selPt?.bed}\nDiagnosis: ${selPt?.diagnosis}\nVitals: ${vitals.slice(0,5).map(v=>`BP:${v.bp} SpO2:${v.spo2}%`).join(' | ')}\nLabs: ${labs.slice(0,20).map(l=>`${l.test_name}:${l.value}`).join(', ')}\nDrugs: ${drugs.map(d=>`${d.name} ${d.dose}`).join(', ')}`;const text=await generateAI('Write a concise hospital course in 3-5 sentences for a discharge summary.',context,600);setAiCourse(text);};
   const selectPt=(id)=>{setSel(id);setView('patients');setDtab('vitals');loadDetail(id);};
 
-  const DTABS=[{id:'vitals',label:'Vitals'},{id:'labs',label:'Labs'},{id:'treatment',label:'Rx'},{id:'tasks',label:'Tasks'},{id:'progress',label:'Notes'},{id:'discharge',label:'DC'},{id:'print',label:'Print'},{id:'files',label:'Files'}];
+  const DTABS=[{id:'vitals',label:'Vitals'},{id:'labs',label:'Labs'},{id:'treatment',label:'Rx'},{id:'tasks',label:'Tasks'},{id:'contsheet',label:'CS'},{id:'progress',label:'Notes'},{id:'discharge',label:'DC'},{id:'print',label:'Print'},{id:'files',label:'Files'}];
 
   return(
     <div style={{fontFamily:"'DM Sans','Segoe UI',sans-serif",background:'#f0f4f8',minHeight:'100vh',maxWidth:480,margin:'0 auto'}}>
@@ -180,6 +182,26 @@ export default function App(){
           {dtab==='labs'&&<LabChart labs={labs}/>}
           {dtab==='treatment'&&<TreatmentSheet drugs={drugs} patientName={selPt.name} onAddDrug={async d=>{await api(`/drugs/${sel}`,'POST',d);loadDetail(sel);}} onToggleDrug={async(id,a)=>{await api(`/drugs/${id}`,'PATCH',{is_active:a});loadDetail(sel);}}/>}
           {dtab==='tasks'&&(<div><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><span style={{fontSize:12,color:'#64748b'}}>{ptTasks.length} tasks</span><div style={{display:'flex',gap:6}}><button onClick={()=>{setMForm(f=>({...f,patientId:sel}));setModal('monitor');}} style={{...SMBTN,background:'#fff7ed',color:'#9a3412',border:'1px solid #fed7aa'}}>+ Protocol</button><button onClick={()=>{setTForm(f=>({...f,patientId:sel}));setModal('task');}} style={{...SMBTN,background:'#3b82f6',color:'#fff',border:'none'}}>+ Task</button></div></div>{ptTasks.length===0?<div style={{color:'#cbd5e1',fontSize:13,textAlign:'center',marginTop:20}}>No tasks.</div>:ptTasks.map(t=><TaskCard key={t.id} task={t} onChange={updTaskStatus}/>)}</div>)}
+          {dtab==='contsheet'&&(<div>
+            {!contForm?(
+              <div>
+                <Sec title="Daily Continuation Sheet" action={<span style={{fontSize:10,color:'#94a3b8'}}>TMC Format</span>}>
+                  <div style={{fontSize:12,color:'#64748b',marginBottom:10,lineHeight:1.6}}>Fill in device days, GCS, O2 support, complaints, and FASTHUGBID checklist. Vitals and medications are auto-populated from the database.</div>
+                </Sec>
+                <ContinuationSheetEditor patient={selPt} vitals={vitals} labs={labs} drugs={drugs} tasks={ptTasks} onGenerate={(formData)=>setContForm(formData)}/>
+              </div>
+            ):(
+              <div>
+                <div style={{display:'flex',gap:8,marginBottom:10}}>
+                  <button onClick={()=>setContForm(null)} style={{...CBTN,flex:1,borderRadius:8}}>← Edit</button>
+                  <button onClick={printContSheet} style={{...SBTN,flex:2,borderRadius:8}}>🖨️ Print / Save PDF</button>
+                </div>
+                <div style={{border:'none',borderRadius:12,overflow:'auto',maxHeight:'70vh',boxShadow:'0 1px 3px rgba(15,23,42,0.06)'}}>
+                  <ContinuationSheet ref={printContRef} patient={selPt} vitals={vitals} labs={labs} drugs={drugs} tasks={ptTasks} formData={contForm}/>
+                </div>
+              </div>
+            )}
+          </div>)}
           {dtab==='progress'&&<ProgressNote patient={selPt} vitals={vitals} labs={labs} drugs={drugs} existingNotes={selPt.notes} onSave={async(note,subjective)=>{const ts=new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});const full=`[${ts}]\nS: ${subjective||'—'}\n${note}`;const combined=selPt.notes?`${selPt.notes}\n\n---\n\n${full}`:full;await saveNotes(sel,combined);}} onGenerateAI={generateProgressNote}/>}
           {dtab==='discharge'&&(<div><Sec title="Discharge Summary" action={<button onClick={generateHospitalCourse} style={{...EBTN,background:'#1d4ed8',color:'#fff',border:'none'}}>AI Generate</button>}><div style={{fontSize:12,color:'#94a3b8',marginBottom:8}}>{selPt.status!=='discharged'?'Patient still admitted.':'Patient discharged.'}</div></Sec><div style={{border:'none',borderRadius:12,overflow:'auto',maxHeight:'60vh',boxShadow:'0 1px 3px rgba(15,23,42,0.06)'}}><DischargeCard ref={printDischargeRef} patient={selPt} vitals={vitals} labs={labs} drugs={drugs} aiCourse={aiCourse} onCourseChange={setAiCourse} extraFields={extraFields} onFieldChange={(k,v)=>setExtraFields(f=>({...f,[k]:v}))} onGenerate={generateHospitalCourse}/></div><button onClick={printDischarge} style={{...SBTN,marginTop:10}}>🖨️ Print Discharge</button>{selPt.status!=='discharged'&&<button onClick={discharge} style={{...SBTN,marginTop:6,background:'#991b1b'}}>Discharge Patient</button>}</div>)}
           {dtab==='print'&&(<div><div style={{border:'none',borderRadius:12,overflow:'auto',maxHeight:'60vh',marginBottom:10,boxShadow:'0 1px 3px rgba(15,23,42,0.06)'}}><PrintCaseSheet ref={printCaseRef} patient={selPt} vitals={vitals} labs={labs} drugs={drugs} tasks={ptTasks}/></div><button onClick={printCaseSheet} style={SBTN}>🖨️ Print Case Sheet</button></div>)}
