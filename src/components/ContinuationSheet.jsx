@@ -5,8 +5,8 @@ const ContinuationSheet = forwardRef(function ContinuationSheet({
   patient, vitals, labs, drugs, tasks, formData
 }, ref) {
   const today = new Date();
-  const todayStr = format(today, "dd/MM/yyyy");
-  const timeStr = format(today, "HH:mm");
+  const todayStr = today.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: '2-digit', year: 'numeric' });
+  const timeStr = today.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false });
   const admitDate = patient.admit_date ? parseISO(patient.admit_date) : today;
   const dayOfICU = differenceInDays(today, admitDate) + 1;
 
